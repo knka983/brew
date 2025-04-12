@@ -72,11 +72,6 @@ module Homebrew
         description:  "Use this as the `bat` theme for syntax highlighting.",
         default_text: "`$BAT_THEME`.",
       },
-      HOMEBREW_BOOTSNAP:                         {
-        description: "If set, use Bootsnap to speed up repeated `brew` calls. " \
-                     "A no-op on Linux when not using Homebrew's vendored, relocatable Ruby.",
-        boolean:     true,
-      },
       HOMEBREW_BOTTLE_DOMAIN:                    {
         description:  "Use this URL as the download mirror for bottles. " \
                       "If bottles at that URL are temporarily unavailable, " \
@@ -194,6 +189,10 @@ module Homebrew
                       "and directories. Visual Studio Code can handle this correctly in project mode, but many " \
                       "editors will do strange things in this case.",
         default_text: "`$EDITOR` or `$VISUAL`.",
+      },
+      HOMEBREW_ENV_SYNC_STRICT:                  {
+        description: "If set, `brew *env-sync` will only sync the exact installed versions of formulae.",
+        boolean:     true,
       },
       HOMEBREW_EVAL_ALL:                         {
         description: "If set, `brew` commands evaluate all formulae and casks, executing their arbitrary code, by " \

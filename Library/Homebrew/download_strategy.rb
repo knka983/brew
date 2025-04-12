@@ -470,25 +470,29 @@ class CurlDownloadStrategy < AbstractFileDownloadStrategy
 
         ohai "Downloading #{url}"
 
-        use_cached_location = cached_location.exist?
+        cached_location_valid = cached_location.exist?
         v = version
-        use_cached_location = false if v.is_a?(Cask::DSL::Version) && v.latest?
+        cached_location_valid = false if v.is_a?(Cask::DSL::Version) && v.latest?
 
-        resolved_url, _, last_modified, _, is_redirection = begin
+        resolved_url, _, last_modified, file_size, is_redirection = begin
           resolve_url_basename_time_file_size(url, timeout: Utils::Timer.remaining!(end_time))
         rescue ErrorDuringExecution
-          raise unless use_cached_location
+          raise unless cached_location_valid
         end
 
         # Authorization is no longer valid after redirects
         meta[:headers]&.delete_if { |header| header.start_with?("Authorization") } if is_redirection
 
-        # The cached location is no longer fresh if Last-Modified is after the file's timestamp
-        if cached_location.exist? && last_modified && last_modified > cached_location.mtime
-          use_cached_location = false
+        # The cached location is no longer fresh if either:
+        # - Last-Modified value is newer than the file's timestamp
+        # - Content-Length value is different than the file's size
+        if cached_location_valid && !is_redirection
+          newer_last_modified = last_modified && last_modified > cached_location.mtime
+          different_file_size = file_size&.nonzero? && file_size != cached_location.size
+          cached_location_valid = !(newer_last_modified || different_file_size)
         end
 
-        if use_cached_location
+        if cached_location_valid
           puts "Already downloaded: #{cached_location}"
         else
           begin
@@ -1219,7 +1223,7 @@ end
 #
 # @api public
 class GitHubGitDownloadStrategy < GitDownloadStrategy
-  sig { params(url: String, name: String, version: T.nilable(Version), meta: T::Hash[Symbol, T.untyped]).void }
+  sig { params(url: String, name: String, version: T.nilable(Version), meta: T.untyped).void }
   def initialize(url, name, version, **meta)
     super
     @version = T.let(version, T.nilable(Version))
@@ -1371,10 +1375,7 @@ end
 #
 # @api public
 class MercurialDownloadStrategy < VCSDownloadStrategy
-  sig {
-    params(url: String, name: String, version: T.any(NilClass, String, Version), meta: T::Hash[Symbol, T.untyped])
-      .void
-  }
+  sig { params(url: String, name: String, version: T.any(NilClass, String, Version), meta: T.untyped).void }
   def initialize(url, name, version, **meta)
     super
     @url = T.let(@url.sub(%r{^hg://}, ""), String)
@@ -1462,10 +1463,7 @@ end
 #
 # @api public
 class BazaarDownloadStrategy < VCSDownloadStrategy
-  sig {
-    params(url: String, name: String, version: T.any(NilClass, String, Version), meta: T::Hash[Symbol, T.untyped])
-      .void
-  }
+  sig { params(url: String, name: String, version: T.any(NilClass, String, Version), meta: T.untyped).void }
   def initialize(url, name, version, **meta)
     super
     @url = T.let(@url.sub(%r{^bzr://}, ""), String)

@@ -43,9 +43,6 @@ module Homebrew::EnvConfig
     sig { returns(T.nilable(::String)) }
     def bat_theme; end
 
-    sig { returns(T::Boolean) }
-    def bootsnap?; end
-
     sig { returns(String) }
     def bottle_domain; end
 
@@ -114,6 +111,9 @@ module Homebrew::EnvConfig
 
     sig { returns(T.nilable(::String)) }
     def editor; end
+
+    sig { returns(T::Boolean) }
+    def env_sync_strict?; end
 
     sig { returns(T::Boolean) }
     def eval_all?; end

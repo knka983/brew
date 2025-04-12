@@ -15,7 +15,6 @@ env:
   HOMEBREW_DEVELOPER: 1
   HOMEBREW_NO_AUTO_UPDATE: 1
   HOMEBREW_NO_ENV_HINTS: 1
-  HOMEBREW_BOOTSNAP: 1
   HOMEBREW_NO_INSTALL_CLEANUP: 1
   HOMEBREW_VERIFY_ATTESTATIONS: 1
 
@@ -41,7 +40,7 @@ jobs:
           test-bot: false
 
       - name: Cache Bundler RubyGems
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ steps.set-up-homebrew.outputs.gems-path }}
           key: ${{ runner.os }}-rubygems-syntax-${{ steps.set-up-homebrew.outputs.gems-hash }}
@@ -54,7 +53,7 @@ jobs:
         run: brew install shellcheck shfmt
 
       - name: Cache style cache
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ~/.cache/Homebrew/style
           key: syntax-style-cache-${{ github.sha }}
@@ -93,7 +92,7 @@ jobs:
           test-bot: true
 
       - name: Cache Bundler RubyGems
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ steps.set-up-homebrew.outputs.gems-path }}
           key: ${{ runner.os }}-rubygems-tap-syntax-${{ steps.set-up-homebrew.outputs.gems-hash }}
@@ -103,7 +102,7 @@ jobs:
         run: brew install-bundler-gems --groups=style
 
       - name: Cache style cache
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ~/.cache/Homebrew/style
           key: tap-syntax-style-cache-${{ github.sha }}
@@ -114,7 +113,6 @@ jobs:
 
       - name: Set up all Homebrew taps
         run: |
-          brew tap homebrew/bundle
           brew tap homebrew/command-not-found
           brew tap homebrew/portable-ruby
 
@@ -123,8 +121,7 @@ jobs:
 
       - name: Run brew style on official taps
         run: |
-          brew style homebrew/bundle \
-                     homebrew/test-bot
+          brew style homebrew/test-bot
 
           brew style homebrew/command-not-found \
                      homebrew/portable-ruby
@@ -261,9 +258,6 @@ jobs:
             test-flags: --coverage
             runs-on: ubuntu-latest
             container: ghcr.io/homebrew/ubuntu20.04:latest
-          - name: tests (macOS 13 x86_64)
-            test-flags: --coverage
-            runs-on: macos-13
           - name: tests (macOS 15 arm64)
             test-flags: --coverage
             runs-on: macos-15
@@ -280,7 +274,7 @@ jobs:
           test-bot: false
 
       - name: Cache Bundler RubyGems
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ steps.set-up-homebrew.outputs.gems-path }}
           key: ${{ matrix.runs-on }}-tests-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
@@ -295,7 +289,7 @@ jobs:
         run: mkdir tests
 
       - name: Cache parallel tests log
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: tests
           key: ${{ runner.os }}-${{ matrix.test-flags }}-parallel_runtime_rspec-${{ github.sha }}
@@ -342,7 +336,7 @@ jobs:
           filenames=$(find Library/Homebrew/test/junit -name 'rspec*.xml' -print | tr '\n' ',')
           echo "filenames=${filenames%,}" >> "$GITHUB_OUTPUT"
 
-      - uses: codecov/test-results-action@5c441a7bcc06f8706cde90192857d337c5dab8a6 # v1.0.4
+      - uses: codecov/test-results-action@f2dba722c67b86c6caa034178c6e4d35335f6706 # v1.1.0
         with:
           working-directory: ${{ steps.set-up-homebrew.outputs.repository-path }}
           files: ${{ steps.junit_xml.outputs.filenames }}
@@ -392,11 +386,69 @@ jobs:
 
       - run: brew test-bot --only-cleanup-before
 
+      - name: Setup environment variables
+        if: matrix.container == 'ghcr.io/homebrew/ubuntu20.04:latest'
+        run: echo "HOMEBREW_GLIBC_TESTING=1" >> "$GITHUB_ENV"
+
       - run: brew test-bot --only-setup
 
       - run: brew install gnu-tar
 
       - run: brew test-bot --only-formulae --only-json-tab --test-default-formula
+
+  test-brew-bundle-services:
+    name: ${{ matrix.name }}
+    needs: syntax
+    if: github.repository_owner == 'Homebrew' && github.event_name != 'push'
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        include:
+          - name: test brew bundle and brew services (Ubuntu)
+            runs-on: ubuntu-latest
+          - name: test brew bundle and brew services (macOS)
+            runs-on: macos-15
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+        with:
+          core: true
+          cask: false
+          test-bot: false
+
+      - run: brew test-bot --only-cleanup-before
+
+      - run: brew test-bot --only-setup
+
+      - name: Run brew bundle and brew services integration tests
+        run: |
+          cat <<EOS >> Brewfile
+            brew "git"
+            brew "memcached", restart_service: true
+            brew "postgresql@15", restart_service: true
+            cask "1password"
+            cask "1password-cli"
+            cask "google-chrome"
+            # VSCode cask is not available on Linux.
+            vscode "github.copilot" if OS.mac?
+          EOS
+
+          brew bundle check && exit 1
+          brew bundle check --verbose && exit 1
+          brew bundle list
+          brew bundle --verbose
+          brew bundle --upgrade-formulae=memcached,postgresql@15
+          brew bundle upgrade
+          brew bundle env | grep PATH | grep git
+          brew bundle env --install
+          brew bundle exec --services true
+          brew bundle dump --force --describe
+          brew services list
+          brew services info memcached postgresql@15
+          brew services info --json memcached postgresql@15
+          brew services cleanup
+          brew bundle cleanup --force
 
   test-analytics:
     runs-on: ${{ matrix.os }}
@@ -413,13 +465,13 @@ jobs:
       uses: Homebrew/actions/setup-homebrew@master
 
     - name: Setup Python
-      uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+      uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
       with:
         python-version-file: ${{ steps.set-up-homebrew.outputs.repository-path }}/Library/Homebrew/formula-analytics/.python-version
 
     - name: Cache Homebrew Bundler RubyGems
       id: cache
-      uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ${{ steps.set-up-homebrew.outputs.gems-path }}
         key: ${{ runner.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
